@@ -500,8 +500,14 @@ struct GradesView: View {
     }
 }
 
-// MARK: - 录入考试
+// MARK: - 录入考试（sheet 用；首页快捷入口直接推 AddExamForm）
 struct AddExamView: View {
+    var body: some View {
+        NavigationStack { AddExamForm() }
+    }
+}
+
+struct AddExamForm: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = DataStore.shared
 
@@ -511,55 +517,59 @@ struct AddExamView: View {
     @State private var msg = ""
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("考试信息") {
-                    TextField("考试名称（如：期中考试）", text: $name)
-                    DatePicker("日期", selection: $date, displayedComponents: .date)
-                }
-                Section("各科成绩") {
-                    ForEach($drafts) { $d in
-                        HStack {
-                            TextField("科目", text: $d.subject)
-                                .frame(maxWidth: 90)
-                            TextField("得分", text: $d.score).keyboardType(.decimalPad)
-                            Text("/").foregroundStyle(.secondary)
-                            TextField("满分", text: $d.full).keyboardType(.decimalPad)
-                            Button {
-                                drafts.removeAll { $0.id == d.id }
-                            } label: {
-                                Image(systemName: "minus.circle.fill").foregroundStyle(.red)
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                    }
-                    Button {
-                        drafts.append(ScoreDraft(subject: "", score: "", full: "100"))
-                    } label: {
-                        Label("添加一科", systemImage: "plus.circle.fill")
-                    }
-                }
-                if !msg.isEmpty {
-                    Section { Text(msg).font(.footnote).foregroundStyle(.red) }
-                }
-            }
+        Form { formContent }
             .navigationTitle("录入考试")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("保存") { save() }
-                        .fontWeight(.semibold)
-                        .disabled(drafts.isEmpty)
-                }
-            }
+            .toolbar { toolbarContent }
             .onAppear {
                 if drafts.isEmpty {
                     drafts = [ScoreDraft(subject: "语文", score: "", full: "100"),
                               ScoreDraft(subject: "数学", score: "", full: "100")]
                 }
             }
+    }
+
+    @ViewBuilder
+    private var formContent: some View {
+        Section("考试信息") {
+            TextField("考试名称（如：期中考试）", text: $name)
+            DatePicker("日期", selection: $date, displayedComponents: .date)
+        }
+        Section("各科成绩") {
+            ForEach($drafts) { $d in
+                HStack {
+                    TextField("科目", text: $d.subject)
+                        .frame(maxWidth: 90)
+                    TextField("得分", text: $d.score).keyboardType(.decimalPad)
+                    Text("/").foregroundStyle(.secondary)
+                    TextField("满分", text: $d.full).keyboardType(.decimalPad)
+                    Button {
+                        drafts.removeAll { $0.id == d.id }
+                    } label: {
+                        Image(systemName: "minus.circle.fill").foregroundStyle(.red)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            Button {
+                drafts.append(ScoreDraft(subject: "", score: "", full: "100"))
+            } label: {
+                Label("添加一科", systemImage: "plus.circle.fill")
+            }
+        }
+        if !msg.isEmpty {
+            Section { Text(msg).font(.footnote).foregroundStyle(.red) }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button("取消") { dismiss() }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button("保存") { save() }
+                .fontWeight(.semibold)
+                .disabled(drafts.isEmpty)
         }
     }
 
