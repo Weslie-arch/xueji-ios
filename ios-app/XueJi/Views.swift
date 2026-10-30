@@ -211,28 +211,35 @@ struct HomeView: View {
     @ObservedObject private var store = DataStore.shared
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    header
-                    if store.loading && !store.loaded {
-                        ProgressView("正在同步云端数据…").padding(.top, 40)
-                    } else if !store.loadError.isEmpty && !store.loaded {
-                        errorCard
-                    } else if store.exams.isEmpty {
-                        emptyCard
-                    } else {
-                        statGrid
-                        subjectCard
-                        recentCard
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.vertical)
+        NavigationStack { homeScroll }
+    }
+
+    private var homeScroll: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                header
+                homeContent
             }
-            .scrollContentBackground(.hidden)
-            .navigationTitle("")
-            .refreshable { await store.refresh(force: true) }
+            .padding(.horizontal)
+            .padding(.vertical)
+        }
+        .scrollContentBackground(.hidden)
+        .navigationTitle("")
+        .refreshable { await store.refresh(force: true) }
+    }
+
+    @ViewBuilder
+    private var homeContent: some View {
+        if store.loading && !store.loaded {
+            ProgressView("正在同步云端数据…").padding(.top, 40)
+        } else if !store.loadError.isEmpty && !store.loaded {
+            errorCard
+        } else if store.exams.isEmpty {
+            emptyCard
+        } else {
+            statGrid
+            subjectCard
+            recentCard
         }
     }
 
@@ -342,38 +349,50 @@ struct GradesView: View {
     @ObservedObject private var store = DataStore.shared
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if store.loading && !store.loaded {
-                    ProgressView("正在加载…")
-                } else if !store.loadError.isEmpty && !store.loaded {
-                    VStack(spacing: 10) {
-                        Text(store.loadError).font(.footnote).multilineTextAlignment(.center)
-                        Button("重试") { Task { await store.refresh(force: true) } }.buttonStyle(.bordered)
-                    }
-                } else if store.exams.isEmpty {
-                    ContentUnavailableView("暂无成绩", systemImage: "graduationcap", description: Text("电脑端录入后会同步到这里"))
-                } else {
-                    List {
-                        ForEach(Array(store.exams.enumerated()), id: \.offset) { _, e in
-                            Section(e.date.isEmpty ? "未标日期" : fmtDate(e.date)) {
-                                ForEach(scoreRows(e), id: \.offset) { row in
-                                    HStack {
-                                        Text(row.s.n ?? "科目").font(.subheadline)
-                                        Spacer()
-                                        Text(scoreText(row.s)).font(.subheadline.weight(.semibold).monospacedDigit())
-                                    }
-                                }
-                            }
+        NavigationStack { gradesRoot }
+            .navigationTitle("成绩")
+    }
+
+    private var gradesRoot: some View {
+        gradesContent.refreshable { await store.refresh(force: true) }
+    }
+
+    @ViewBuilder
+    private var gradesContent: some View {
+        if store.loading && !store.loaded {
+            ProgressView("正在加载…")
+        } else if !store.loadError.isEmpty && !store.loaded {
+            gradesError
+        } else if store.exams.isEmpty {
+            ContentUnavailableView("暂无成绩", systemImage: "graduationcap", description: Text("电脑端录入后会同步到这里"))
+        } else {
+            gradesList
+        }
+    }
+
+    private var gradesError: some View {
+        VStack(spacing: 10) {
+            Text(store.loadError).font(.footnote).multilineTextAlignment(.center)
+            Button("重试") { Task { await store.refresh(force: true) } }.buttonStyle(.bordered)
+        }
+    }
+
+    private var gradesList: some View {
+        List {
+            ForEach(store.examSections) { sec in
+                Section(sec.title) {
+                    ForEach(sec.rows) { row in
+                        HStack {
+                            Text(subName(row.s)).font(.subheadline)
+                            Spacer()
+                            Text(scoreText(row.s)).font(.subheadline.weight(.semibold).monospacedDigit())
                         }
                     }
-                    .scrollContentBackground(.hidden)
                 }
             }
-            .background(Color.clear)
-            .navigationTitle("成绩")
-            .refreshable { await store.refresh(force: true) }
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
     }
 }
 
@@ -538,19 +557,6 @@ struct LabeledRow: View {
 // MARK: - 工具
 extension Notification.Name {
     static let xjLogout = Notification.Name("xjLogout")
-}
-
-struct ScoreRow: Identifiable {
-    let id: Int
-    let s: ScoreItem
-    var offset: Int { id }
-}
-
-func scoreRows(_ e: Exam) -> [ScoreRow] {
-    let list = e.scores ?? []
-    var out: [ScoreRow] = []
-    for (i, s) in list.enumerated() { out.append(ScoreRow(id: i, s: s)) }
-    return out
 }
 
 func scoreColor(_ percent: Int) -> Color {
