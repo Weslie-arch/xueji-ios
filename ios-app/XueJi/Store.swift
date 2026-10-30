@@ -67,6 +67,13 @@ struct ChatMsg: Identifiable {
     let text: String
 }
 
+struct SubjectStat: Identifiable {
+    let id = UUID()
+    let name: String
+    let avgPercent: Int
+    let count: Int
+}
+
 // MARK: - 全局数据仓库：云端 state 的唯一镜像，全部页面共享
 @MainActor
 final class DataStore: ObservableObject {
@@ -330,7 +337,7 @@ final class DataStore: ObservableObject {
         raw["chat"] = chat
         let nextId = (chatMsgs.last?.id ?? -1) + 1
         chatMsgs.append(ChatMsg(id: nextId, me: me, text: text))
-        if !me { scheduleSave() }
+        scheduleSave()
     }
 
     func setTheme(_ t: String) {
