@@ -78,8 +78,8 @@ struct LoginView: View {
             }
             GlassCard {
                 VStack(spacing: 14) {
-                    LabeledField("服务器", text: $server, placeholder: "https://xueji.misktool.top")
-                    LabeledField("账号", text: $account, placeholder: "手机号 / 账号名")
+                    LabeledField(title: "服务器", text: $server, placeholder: "https://xueji.misktool.top")
+                    LabeledField(title: "账号", text: $account, placeholder: "手机号 / 账号名")
                     SecureLabeledField("密码", text: $password)
                     if !msg.isEmpty {
                         Text(msg).font(.footnote).foregroundStyle(.red)
@@ -216,7 +216,7 @@ struct HomeView: View {
                         GlassCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("最近考试").font(.headline)
-                                ForEach(Array(exams.prefix(3))) { e in
+                                ForEach(Array(exams.prefix(3).enumerated()), id: \.offset) { _, e in
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(fmtDate(e.date)).font(.subheadline.weight(.semibold))
                                         Text(subjectLine(e)).font(.caption).foregroundStyle(.secondary)
@@ -269,7 +269,6 @@ struct HomeView: View {
             await MainActor.run {
                 exams = ex
                 subjects = stats
-                APIClient.shared.fetchBalance()
             }
         } catch {
             await MainActor.run { err = error.localizedDescription }
@@ -347,7 +346,7 @@ struct GradesView: View {
 
 // MARK: - AI 助手（服务端统一转发，Key 不经过 App）
 struct ChatView: View {
-    struct Msg: Identifiable { let id = UUID(); let me: Bool; let text: String }
+    struct Msg: Identifiable { let id = UUID(); let me: Bool; var text: String }
 
     @State private var msgs: [Msg] = []
     @State private var input = ""
