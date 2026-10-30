@@ -286,10 +286,10 @@ struct HomeView: View {
                             Text(s.name).font(.subheadline)
                             Spacer()
                             Text("\(s.avgPercent)%").font(.subheadline.weight(.bold).monospacedDigit())
-                                .foregroundStyle(s.avgPercent >= 85 ? .green : (s.avgPercent >= 60 ? .orange : .red))
+                                .foregroundStyle(scoreColor(s.avgPercent))
                         }
                         ProgressView(value: Double(s.avgPercent), total: 100)
-                            .tint(s.avgPercent >= 85 ? .green : (s.avgPercent >= 60 ? .orange : .red))
+                            .tint(scoreColor(s.avgPercent))
                     }
                 }
             }
@@ -303,12 +303,12 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Label("最近考试", systemImage: "clock.fill")
                     .font(.headline)
-                ForEach(Array(store.recentExams.enumerated()), id: \.offset) { _, e in
+                ForEach(Array(store.recentExams.enumerated()), id: \.offset) { idx, e in
                     VStack(alignment: .leading, spacing: 3) {
                         Text(fmtDate(e.date)).font(.subheadline.weight(.semibold))
                         Text(subjectLine(e)).font(.caption).foregroundStyle(.secondary)
                     }
-                    if e.id != store.recentExams.last?.id { Divider() }
+                    if idx < store.recentExams.count - 1 { Divider() }
                 }
             }
             .padding(18)
@@ -357,11 +357,11 @@ struct GradesView: View {
                     List {
                         ForEach(Array(store.exams.enumerated()), id: \.offset) { _, e in
                             Section(e.date.isEmpty ? "未标日期" : fmtDate(e.date)) {
-                                ForEach(Array((e.scores ?? []).enumerated()), id: \.offset) { _, s in
+                                ForEach(scoreRows(e), id: \.offset) { row in
                                     HStack {
-                                        Text(s.n ?? "科目").font(.subheadline)
+                                        Text(row.s.n ?? "科目").font(.subheadline)
                                         Spacer()
-                                        Text(scoreText(s)).font(.subheadline.weight(.semibold).monospacedDigit())
+                                        Text(scoreText(row.s)).font(.subheadline.weight(.semibold).monospacedDigit())
                                     }
                                 }
                             }
@@ -538,6 +538,25 @@ struct LabeledRow: View {
 // MARK: - 工具
 extension Notification.Name {
     static let xjLogout = Notification.Name("xjLogout")
+}
+
+struct ScoreRow: Identifiable {
+    let id: Int
+    let s: ScoreItem
+    var offset: Int { id }
+}
+
+func scoreRows(_ e: Exam) -> [ScoreRow] {
+    let list = e.scores ?? []
+    var out: [ScoreRow] = []
+    for (i, s) in list.enumerated() { out.append(ScoreRow(id: i, s: s)) }
+    return out
+}
+
+func scoreColor(_ percent: Int) -> Color {
+    if percent >= 85 { return .green }
+    if percent >= 60 { return .orange }
+    return .red
 }
 
 func fmtDate(_ s: String?) -> String {
