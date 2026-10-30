@@ -37,6 +37,16 @@ final class DataStore: ObservableObject {
         exams.sorted { ($0.date ?? "") > ($1.date ?? "") }.prefix(3).map { $0 }
     }
 
+    /// 成绩页分组行（预先算好，View 里零推断负担）
+    var examSections: [ExamSection] {
+        var out: [ExamSection] = []
+        for (i, e) in exams.enumerated() {
+            let title = (e.date ?? "").isEmpty ? "未标日期" : fmtDateStr(e.date)
+            out.append(ExamSection(id: i, title: title, rows: scoreRowList(e.scores ?? [])))
+        }
+        return out
+    }
+
     var displayName: String {
         let n = APIClient.shared.nickname
         return n.isEmpty ? (APIClient.shared.account.isEmpty ? "同学" : APIClient.shared.account) : n
@@ -81,6 +91,33 @@ final class DataStore: ObservableObject {
 }
 
 // MARK: - 头像视图：取名字首字的渐变圆
+struct ExamSection: Identifiable {
+    let id: Int
+    let title: String
+    let rows: [ScoreRow]
+}
+
+struct ScoreRow: Identifiable {
+    let id: Int
+    let s: ScoreItem
+}
+
+func scoreRowList(_ list: [ScoreItem]) -> [ScoreRow] {
+    var out: [ScoreRow] = []
+    for (i, s) in list.enumerated() { out.append(ScoreRow(id: i, s: s)) }
+    return out
+}
+
+func fmtDateStr(_ s: String?) -> String {
+    guard let s, !s.isEmpty else { return "未标日期" }
+    return s
+}
+
+func subName(_ s: ScoreItem) -> String {
+    if let n = s.n, !n.isEmpty { return n }
+    return "科目"
+}
+
 struct AvatarView: View {
     var name: String
     var size: CGFloat = 44
