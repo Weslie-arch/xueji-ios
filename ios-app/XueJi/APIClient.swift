@@ -114,12 +114,54 @@ final class APIClient: ObservableObject {
         }
     }
 
-    // MARK: - 数据
+    // MARK: - 数据（宽松 JSONSerialization 解析，免疫字段类型差异）
 
-    func fetchState() async throws -> XJState {
-        let resp = try await getJSON(try endpoint("state"), as: StateResp.self)
-        guard resp.ok == true else { throw APIError.message(resp.error ?? "读取数据失败") }
-        return resp.state ?? XJState(exams: [], essays: [], homeworks: [])
+    /// 读取云端 state（原始字典）；请求自带 14 秒超时看门狗，绝不无限等待
+    func fetchRawState() async throws -> [String: Any] {
+        let url = try endpoint("state")
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 14
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.badResponse }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let e = obj["error"] as? String, (obj["ok"] as? Bool) != true {
+                throw APIError.message(e)
+            }
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.http(http.statusCode, "读取失败")
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw APIError.badResponse
+        }
+        guard (obj["ok"] as? Bool) == true else {
+            throw APIError.message("登录会话已过期，请退出后重新登录")
+        }
+        guard let st = obj["state"] as? [String: Any] else {
+            return ["exams": [Any]()]
+        }
+        return st
+    }
+
+    /// 上传云端 state（整包写回，与网页端 save 同一接口）；24 秒超时
+    func pushRawState(_ raw: [String: Any]) async throws {
+        let url = try endpoint("state")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.timeoutInterval = 24
+        req.httpBody = try JSONSerialization.data(withJSONObject: raw)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.badResponse
+        }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let e = obj["error"] as? String {
+                throw APIError.message(e)
+            }
+            if (obj["ok"] as? Bool) == true { return }
+        }
+        throw APIError.message("服务器未确认保存")
     }
 
     func fetchBalance() async -> Double {
