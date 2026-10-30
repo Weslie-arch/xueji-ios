@@ -116,11 +116,11 @@ final class APIClient: ObservableObject {
 
     // MARK: - 数据（宽松 JSONSerialization 解析，免疫字段类型差异）
 
-    /// 读取云端 state（原始字典）；请求自带 14 秒超时看门狗，绝不无限等待
+    /// 读取云端 state（原始字典）；请求自带 30 秒超时看门狗，绝不无限等待
     func fetchRawState() async throws -> [String: Any] {
         let url = try endpoint("state")
         var req = URLRequest(url: url)
-        req.timeoutInterval = 14
+        req.timeoutInterval = 30
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw APIError.badResponse }
         if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -149,7 +149,7 @@ final class APIClient: ObservableObject {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.timeoutInterval = 24
+        req.timeoutInterval = 40
         req.httpBody = try JSONSerialization.data(withJSONObject: raw)
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
