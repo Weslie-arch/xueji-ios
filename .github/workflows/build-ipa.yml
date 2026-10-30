@@ -30,7 +30,6 @@ jobs:
       - name: Archive (unsigned, generic iOS device)
         working-directory: ios-app
         run: |
-          set -o pipefail
           xcodebuild archive \
             -project XueJi.xcodeproj \
             -scheme XueJi \
@@ -38,10 +37,12 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath build/XueJi.xcarchive \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO \
-            | tee build.log | grep -E "error|warning: |Archive|ARCHIVE" || true
+            > build.log 2>&1 || { tail -60 build.log; exit 1; }
+          grep -E "error:|ARCHIVE SUCCEEDED" build.log || true
 
       - name: Package unsigned IPA
         run: |
+          test -d ios-app/build/XueJi.xcarchive/Products/Applications/XueJi.app || { echo "XueJi.app not found"; exit 1; }
           mkdir -p build/Payload
           cp -R ios-app/build/XueJi.xcarchive/Products/Applications/XueJi.app build/Payload/
           cd build
