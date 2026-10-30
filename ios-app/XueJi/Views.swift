@@ -80,7 +80,7 @@ struct LoginView: View {
                 VStack(spacing: 14) {
                     LabeledField(title: "服务器", text: $server, placeholder: "https://xueji.misktool.top")
                     LabeledField(title: "账号", text: $account, placeholder: "手机号 / 账号名")
-                    SecureLabeledField("密码", text: $password)
+                    SecureLabeledField(title: "密码", text: $password)
                     if !msg.isEmpty {
                         Text(msg).font(.footnote).foregroundStyle(.red)
                     }
