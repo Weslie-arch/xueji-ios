@@ -36,6 +36,22 @@ final class APIClient: ObservableObject {
 
     private var baseURL: URL? { URL(string: baseString) }
 
+    // MARK: - Cookie 手动兜底（URLSession 自动 Cookie 在部分主机/重定向下会丢，这里显式带上）
+    private let tokenKey = "xj_token_manual"
+
+    private func persistCookie(for url: URL) {
+        if let c = HTTPCookieStorage.shared.cookies(for: url)?.first(where: { $0.name == "xj_token" }) {
+            UserDefaults.standard.set(c.value, forKey: tokenKey)
+        }
+    }
+
+    private func applyCookie(_ req: inout URLRequest) {
+        let t = UserDefaults.standard.string(forKey: tokenKey) ?? ""
+        if !t.isEmpty { req.setValue("xj_token=" + t, forHTTPHeaderField: "Cookie") }
+    }
+
+    func clearCookie() { UserDefaults.standard.removeObject(forKey: tokenKey) }
+
     // MARK: - 路径
 
     /// 按后端模式拼 URL。path 例："login" / "state" / "balance"
@@ -79,8 +95,10 @@ final class APIClient: ObservableObject {
     func login(account: String, password: String) async throws -> String {
         try await detect()
         struct Body: Codable { let phone: String; let pass: String }
-        let resp = try await postJSON(endpoint("login"), body: Body(phone: account, pass: password), as: LoginResp.self)
+        let url = try endpoint("login")
+        let resp = try await postJSON(url, body: Body(phone: account, pass: password), as: LoginResp.self)
         if resp.ok == true, let acc = resp.account {
+            persistCookie(for: url) // 登录成功后立刻记下会话 token，后续请求显式携带
             await MainActor.run { self.account = acc }
             _ = try? await refreshMe()
             return acc
@@ -107,6 +125,7 @@ final class APIClient: ObservableObject {
         if let url = try? endpoint("logout") {
             _ = try? await postJSON(url, body: Optional<Int>.none, as: MeResp.self)
         }
+        clearCookie()
         await MainActor.run {
             self.account = ""
             self.nickname = ""
@@ -116,11 +135,24 @@ final class APIClient: ObservableObject {
 
     // MARK: - 数据（宽松 JSONSerialization 解析，免疫字段类型差异）
 
-    /// 读取云端 state（原始字典）；请求自带 30 秒超时看门狗，绝不无限等待
+    /// 读取云端 state（原始字典）：失败自动重试 3 次，请求自带 30 秒超时看门狗
     func fetchRawState() async throws -> [String: Any] {
+        var lastErr: Error?
+        for attempt in 0..<3 {
+            do { return try await fetchRawStateOnce() }
+            catch {
+                lastErr = error
+                if attempt < 2 { try? await Task.sleep(nanoseconds: 1_200_000_000) }
+            }
+        }
+        throw lastErr ?? APIError.badResponse
+    }
+
+    private func fetchRawStateOnce() async throws -> [String: Any] {
         let url = try endpoint("state")
         var req = URLRequest(url: url)
         req.timeoutInterval = 30
+        applyCookie(&req)
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw APIError.badResponse }
         if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -150,6 +182,7 @@ final class APIClient: ObservableObject {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.timeoutInterval = 40
+        applyCookie(&req)
         req.httpBody = try JSONSerialization.data(withJSONObject: raw)
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -182,6 +215,7 @@ final class APIClient: ObservableObject {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.timeoutInterval = 120
+        applyCookie(&req)
         req.httpBody = try JSONEncoder().encode(Body(messages: messages, kind: "chat"))
 
         let (data, resp) = try await URLSession.shared.data(for: req)
@@ -223,6 +257,7 @@ final class APIClient: ObservableObject {
     private func getJSON<T: Decodable>(_ url: URL, as type: T.Type, timeout: Double = 30) async throws -> T {
         var req = URLRequest(url: url)
         req.timeoutInterval = timeout
+        applyCookie(&req)
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw APIError.badResponse }
         return try decode(data, status: http.statusCode)
@@ -233,6 +268,7 @@ final class APIClient: ObservableObject {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.timeoutInterval = timeout
+        applyCookie(&req)
         if let b = body { req.httpBody = try JSONEncoder().encode(b) }
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw APIError.badResponse }
