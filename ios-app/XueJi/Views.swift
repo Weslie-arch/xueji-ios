@@ -5,7 +5,10 @@ import UIKit
 @main
 struct XueJiApp: App {
     init() {
-        // Tab 栏透明，让极光背景透出来
+        // 统一强调色：学迹蓝（单一主色，避免多色堆砌）
+        UIView.appearance().tintColor = UIColor(red: 0.22, green: 0.60, blue: 0.86, alpha: 1)
+        UINavigationBar.appearance().tintColor = UIColor(red: 0.22, green: 0.60, blue: 0.86, alpha: 1)
+        // Tab 栏透明，让背景层次透出来
         let tab = UITabBarAppearance()
         tab.configureWithTransparentBackground()
         UITabBar.appearance().standardAppearance = tab
@@ -17,9 +20,9 @@ struct XueJiApp: App {
     }
 }
 
-// MARK: - 液态玻璃卡片（iOS 26 官方 glassEffect；旧系统回退毛玻璃）
+// MARK: - 液态玻璃卡片（iOS 26 官方 glassEffect；旧系统回退精细毛玻璃）
 struct GlassCard<Content: View>: View {
-    var corner: CGFloat = 22
+    var corner: CGFloat = 20
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -29,34 +32,54 @@ struct GlassCard<Content: View>: View {
                     .glassEffect(.regular, in: .rect(cornerRadius: corner))
             } else {
                 content
-                    .background(.ultraThinMaterial, in: .rect(cornerRadius: corner))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: corner)
-                            .strokeBorder(.white.opacity(0.3), lineWidth: 0.6)
+                    .background(
+                        RoundedRectangle(cornerRadius: corner, style: .continuous)
+                            .fill(Color.white.opacity(0.07))
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: corner, style: .continuous))
                     )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: corner, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(colors: [Color.white.opacity(0.18), Color.white.opacity(0.05)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 0.7
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.30), radius: 14, y: 6)
             }
         }
     }
 }
 
-// MARK: - 极光渐变背景（全局氛围底色）
+// MARK: - 品牌色（单一主色，不做彩虹渐变）
+enum XJColor {
+    static let brand = Color(red: 0.22, green: 0.60, blue: 0.86)   // 学迹蓝
+    static let brandSoft = Color(red: 0.38, green: 0.74, blue: 0.95)
+}
+
+// MARK: - 背景：深邃墨底 + 单一冷调柔光（克制、原生质感，无彩色光斑）
 struct AuroraBackground: View {
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.36, green: 0.42, blue: 0.92),
-                                    Color(red: 0.55, green: 0.40, blue: 0.92),
-                                    Color(red: 0.72, green: 0.45, blue: 0.85)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            Circle().fill(.white.opacity(0.12)).frame(width: 320).blur(radius: 70)
-                .offset(x: -110, y: -260)
-            Circle().fill(.white.opacity(0.09)).frame(width: 260).blur(radius: 60)
-                .offset(x: 130, y: 340)
+            // 基础墨色：近黑略带蓝，避免纯黑死板
+            LinearGradient(colors: [
+                Color(red: 0.055, green: 0.071, blue: 0.098),
+                Color(red: 0.086, green: 0.098, blue: 0.125),
+                Color(red: 0.060, green: 0.072, blue: 0.094)
+            ], startPoint: .top, endPoint: .bottom)
+            // 顶部极淡冷光：单一色相，只做纵深不做斑块
+            RadialGradient(gradient: Gradient(colors: [XJColor.brand.opacity(0.22), Color.clear]),
+                           center: UnitPoint(x: 0.5, y: -0.06),
+                           startRadius: 8, endRadius: 520)
+            // 底部微压暗，收束画面
+            LinearGradient(colors: [Color.clear, Color.black.opacity(0.34)],
+                           startPoint: UnitPoint(x: 0.5, y: 0.60), endPoint: .bottom)
         }
         .ignoresSafeArea()
     }
 }
 
-/// 页面骨架：极光背景 + 内容
+/// 页面骨架：背景 + 内容
 struct Screen<Content: View>: View {
     @ViewBuilder var content: Content
 
@@ -97,6 +120,7 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .xjLogout)) { _ in
             loggedIn = false
         }
+        .preferredColorScheme(.dark) // 深色沉浸设计：与背景层次统一
     }
 }
 
@@ -162,7 +186,7 @@ struct LoginView: View {
                 .buttonStyle(.borderedProminent)
                 .clipShape(Capsule())
                 .disabled(busy || account.isEmpty || password.isEmpty)
-                Text("☁️ 登录后自动同步云端全部数据")
+                Text("登录后自动同步云端全部数据")
                     .font(.caption2).foregroundStyle(.secondary)
             }
             .padding(22)
